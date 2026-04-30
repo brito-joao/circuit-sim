@@ -123,11 +123,11 @@ ${jsonCode}
 
   return (
     <>
-      {/* Toggle button — bottom-right, above IKEA panel */}
+      {/* Toggle button — top-left, below the Lab Table button */}
       <button
         onClick={() => setIsOpen(o => !o)}
         style={{
-          position: 'absolute', bottom: '160px', right: '20px', zIndex: 600,
+          position: 'absolute', top: '70px', left: '20px', zIndex: 600,
           background: '#6c5ce7', color: 'white', border: 'none', padding: '8px 14px',
           borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px',
           boxShadow: '0 4px 12px rgba(108,92,231,0.4)',
@@ -138,8 +138,8 @@ ${jsonCode}
 
       {isOpen && (
         <div style={{
-          position: 'absolute', bottom: '220px', right: '20px', zIndex: 600,
-          width: '420px', background: bg, border: `1px solid ${border}`,
+          position: 'absolute', top: '115px', left: '20px', zIndex: 600,
+          width: '420px', maxWidth: 'calc(100vw - 40px)', background: bg, border: `1px solid ${border}`,
           borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', overflow: 'hidden',
         }}>
           {/* Header */}

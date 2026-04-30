@@ -231,20 +231,99 @@ export default function Breadboard({
         </button>
       </div>
 
-      {/* Guided Build Mode UI */}
-      <div style={{ position: 'absolute', bottom: '20px', right: '20px', background: isDarkMode ? 'rgba(47, 54, 64, 0.9)' : 'rgba(255, 255, 255, 0.9)', padding: '15px', borderRadius: '8px', border: `1px solid ${isDarkMode ? '#576574' : '#dfe6e9'}`, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-        <h4 style={{ margin: '0 0 10px 0', color: isDarkMode ? '#f5f6fa' : '#2d3436' }}>IKEA Build Mode</h4>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-          <button onClick={() => setBuildStep(0)} style={{ background: '#6c5ce7', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Start</button>
-          <button onClick={() => setBuildStep(prev => prev + 1)} style={{ background: '#0984e3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Next Wire</button>
-          <button onClick={() => setBuildStep(-1)} style={{ background: '#636e72', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Show All</button>
+      {/* ─── Guided Build Mode (IKEA Step-by-Step) ─────────────────────── */}
+      <div
+        data-tour="ikea-panel"
+        style={{
+          position: 'absolute', bottom: '20px', right: '20px',
+          background: isDarkMode ? 'rgba(30,39,46,0.97)' : 'rgba(255,255,255,0.98)',
+          padding: '16px', borderRadius: '14px', minWidth: '220px', maxWidth: '260px',
+          border: `1px solid ${isDarkMode ? '#2d3436' : '#e0e4f0'}`,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.14)',
+        }}
+      >
+        {/* Header */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ fontWeight: 800, fontSize: '13px', color: isDarkMode ? '#f5f6fa' : '#1e272e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            🔧 Montagem Passo a Passo
+          </div>
+          <div style={{ fontSize: '11px', color: isDarkMode ? '#b2bec3' : '#636e72', marginTop: '3px' }}>
+            Siga os fios como instruções IKEA
+          </div>
         </div>
-        <button onClick={autoCompleteCircuit} style={{ background: '#d63031', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}>⚡ Auto-Wire Cheat</button>
-        {buildStep > -1 && simData.wires && simData.wires[buildStep] && (
-          <div style={{ marginTop: '10px', fontSize: '13px', color: '#e84393', fontWeight: 'bold' }}>
-            Connect {simData.wires[buildStep].from} to {simData.wires[buildStep].to}
+
+        {/* Wire progress indicator */}
+        {buildStep > -1 && simData.wires && (
+          <div style={{ marginBottom: '12px', background: isDarkMode ? '#2d3436' : '#f0f4ff', borderRadius: '8px', padding: '10px 12px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: isDarkMode ? '#b2bec3' : '#6c5ce7', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+              {buildStep < simData.wires.length
+                ? `Fio ${buildStep + 1} de ${simData.wires.length}`
+                : `Todos os ${simData.wires.length} fios colocados ✅`}
+            </div>
+            {/* Progress bar */}
+            <div style={{ height: '4px', background: isDarkMode ? '#636e72' : '#dfe6e9', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: '2px',
+                width: `${Math.min(100, ((buildStep + 1) / (simData.wires?.length || 1)) * 100)}%`,
+                background: 'linear-gradient(90deg, #6c5ce7, #00b894)',
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+            {/* Current wire instruction */}
+            {simData.wires[buildStep] && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#e84393', fontWeight: 700 }}>
+                ⚡ Liga: <span style={{ fontFamily: 'monospace' }}>{simData.wires[buildStep].from}</span>
+                <span style={{ color: isDarkMode ? '#b2bec3' : '#636e72', fontWeight: 400 }}> → </span>
+                <span style={{ fontFamily: 'monospace' }}>{simData.wires[buildStep].to}</span>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Main buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+          <button
+            onClick={() => setBuildStep(0)}
+            title="Começar a ver os fios um de cada vez"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#6c5ce7', color: 'white', border: 'none', padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'opacity 0.15s' }}
+          >
+            <span>▶</span>
+            <span style={{ flex: 1, textAlign: 'left' }}>Iniciar Montagem</span>
+            <span style={{ fontSize: '10px', opacity: 0.7, fontWeight: 400 }}>do fio 1</span>
+          </button>
+
+          <button
+            onClick={() => setBuildStep(prev => prev + 1)}
+            disabled={buildStep < 0}
+            title="Revelar o próximo fio"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: buildStep >= 0 ? '#0984e3' : '#dfe6e9', color: buildStep >= 0 ? 'white' : '#b2bec3', border: 'none', padding: '9px 12px', borderRadius: '8px', cursor: buildStep >= 0 ? 'pointer' : 'default', fontWeight: 700, fontSize: '13px', transition: 'all 0.15s' }}
+          >
+            <span>→</span>
+            <span style={{ flex: 1, textAlign: 'left' }}>Próximo Fio</span>
+            <span style={{ fontSize: '10px', opacity: 0.7, fontWeight: 400 }}>revelar</span>
+          </button>
+
+          <button
+            onClick={() => setBuildStep(-1)}
+            title="Mostrar todos os fios de uma vez"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: isDarkMode ? '#2d3436' : '#f0f2f5', color: isDarkMode ? '#dfe6e9' : '#2d3436', border: `1px solid ${isDarkMode ? '#636e72' : '#dfe6e9'}`, padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'all 0.15s' }}
+          >
+            <span>👀</span>
+            <span style={{ flex: 1, textAlign: 'left' }}>Ver Todos os Fios</span>
+          </button>
+
+          <div style={{ height: '1px', background: isDarkMode ? '#2d3436' : '#e0e4f0', margin: '2px 0' }} />
+
+          <button
+            onClick={autoCompleteCircuit}
+            title="Ligar automaticamente todos os fios de uma vez"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#d63031', color: 'white', border: 'none', padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', transition: 'opacity 0.15s' }}
+          >
+            <span>⚡</span>
+            <span style={{ flex: 1, textAlign: 'left' }}>Ligar Tudo</span>
+            <span style={{ fontSize: '10px', opacity: 0.7, fontWeight: 400 }}>saltar etapas</span>
+          </button>
+        </div>
       </div>
 
       <BreadboardTooltip tooltip={tooltip} theme={theme} />
