@@ -16,6 +16,7 @@ interface BreadboardWiresProps {
   setDraggingWire: React.Dispatch<React.SetStateAction<any>>;
   buildStep: number;
   isRunning: boolean;
+  changedPins?: Set<string>;
 }
 
 export function BreadboardWires({
@@ -30,7 +31,8 @@ export function BreadboardWires({
   hideDetails,
   setDraggingWire,
   buildStep,
-  isRunning
+  isRunning,
+  changedPins,
 }: BreadboardWiresProps) {
   if (!wires) return null;
 
@@ -43,6 +45,14 @@ export function BreadboardWires({
           }
           .wire-flow {
             animation: dashFlow 0.5s linear infinite;
+          }
+          @keyframes debugFlash {
+            0%   { filter: drop-shadow(0 0 0px #ffeaa7); }
+            30%  { filter: drop-shadow(0 0 18px #fdcb6e) drop-shadow(0 0 32px #e17055); }
+            100% { filter: drop-shadow(0 0 4px #ffeaa7); }
+          }
+          .wire-debug-flash {
+            animation: debugFlash 0.7s ease-out forwards;
           }
         `}
       </style>
@@ -112,13 +122,15 @@ export function BreadboardWires({
           d = `M ${c1.x} ${c1.y} C ${c1.x} ${cp1y}, ${c2.x} ${cp2y}, ${c2.x} ${c2.y}`;
         }
 
-        const isHigh = pinStates[w.from] === 1;
+        const isHigh        = pinStates[w.from] === 1;
+        const isChangedDebug = changedPins && (changedPins.has(w.from) || changedPins.has(w.to));
         // Ultra visible when not running
         const opacity = !isRunning ? '1' : (isHighlighted ? '1' : (isHigh ? '1' : (isDarkMode ? '0.4' : '0.3')));
         const currentStroke = isHighlighted ? 10 : (isHigh ? highStroke : baseStroke);
 
         let filter = 'drop-shadow(2px 3px 2px rgba(0,0,0,0.3))';
-        if (isHighlighted) filter = `drop-shadow(0 0 12px yellow)`;
+        if (isChangedDebug) filter = 'none'; // handled by CSS class
+        else if (isHighlighted) filter = `drop-shadow(0 0 12px yellow)`;
         else if (isHigh) filter = `drop-shadow(0 0 8px ${finalColor})`;
 
         return (
@@ -126,7 +138,10 @@ export function BreadboardWires({
             {/* The Wire Path */}
             <path
               id={`svg-${w.id}`}
-              className={isHigh && isRunning ? 'wire-flow' : ''}
+              className={[
+                isHigh && isRunning ? 'wire-flow' : '',
+                isChangedDebug ? 'wire-debug-flash' : '',
+              ].filter(Boolean).join(' ')}
               d={d}
               stroke={finalColor}
               strokeWidth={currentStroke}

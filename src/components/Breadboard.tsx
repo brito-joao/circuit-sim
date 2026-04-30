@@ -14,7 +14,7 @@ import { BreadboardWires } from './breadboard/BreadboardWires';
 import { useBreadboard } from './breadboard/useBreadboard';
 import { getBreadboardLayout } from './breadboard/breadboardUtils';
 import { getTheme } from './breadboard/breadboardThemes';
-import { TruthTableValidator } from './breadboard/TruthTableValidator';
+import { TestBenchPanel } from './breadboard/TestBenchPanel';
 import { generateTruthTable } from '@/hooks/useSimulation';
 
 
@@ -27,6 +27,11 @@ interface BreadboardProps {
   editMode: boolean;
   onToggleEditMode: () => void;
   isRunning: boolean;
+  jsonCode: string;
+  debugMode: boolean;
+  onToggleDebugMode: () => void;
+  onExecuteTick: () => void;
+  changedPins: Set<string>;
 }
 
 export default function Breadboard({
@@ -37,6 +42,11 @@ export default function Breadboard({
   editMode,
   onToggleEditMode,
   isRunning,
+  jsonCode,
+  debugMode,
+  onToggleDebugMode,
+  onExecuteTick,
+  changedPins,
 }: BreadboardProps) {
   const {
     numBoards,
@@ -95,6 +105,9 @@ export default function Breadboard({
         setXRayMode={setXRayMode}
         editMode={editMode}
         onToggleEditMode={onToggleEditMode}
+        debugMode={debugMode}
+        onToggleDebugMode={onToggleDebugMode}
+        onExecuteTick={onExecuteTick}
       />
 
       <svg
@@ -167,6 +180,7 @@ export default function Breadboard({
             showDetails={showDetails}
             hideDetails={hideDetails}
             customComponents={simData.customComponents}
+            componentDefinitions={simData.componentDefinitions}
           />
 
           <BreadboardInputs 
@@ -201,13 +215,14 @@ export default function Breadboard({
             setDraggingWire={setDraggingWire}
             buildStep={buildStep}
             isRunning={isRunning}
+            changedPins={changedPins}
           />
 
         </g>
       </svg>
 
       {/* Overlays */}
-      <TruthTableValidator simData={simData} isDarkMode={isDarkMode} />
+      <TestBenchPanel simData={simData} isDarkMode={isDarkMode} jsonCode={jsonCode} />
 
       {/* Lab Exporter */}
       <div style={{ position: 'absolute', top: '20px', left: '20px', display: 'flex', gap: '10px' }}>
