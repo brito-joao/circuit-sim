@@ -5,12 +5,77 @@ export interface Chip {
   col: number;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Schema-Driven UI (visualTemplate)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Bind an SVG element's fill colour to a live pin state. */
+export interface VisualBindState {
+  pin: number;          // 1-indexed pin number on this chip
+  activeFill: string;   // CSS colour when pin === 1 (HIGH)
+  inactiveFill: string; // CSS colour when pin === 0 (LOW)
+}
+
+export interface VisualRect {
+  type: 'rect';
+  id?: string;
+  x: number; y: number; w: number; h: number;
+  fill?: string; rx?: number;
+  bindState?: VisualBindState;
+}
+
+export interface VisualCircle {
+  type: 'circle';
+  id?: string;
+  cx: number; cy: number; r: number;
+  fill?: string;
+  bindState?: VisualBindState;
+}
+
+export interface VisualPath {
+  type: 'path';
+  id?: string;
+  d: string;
+  fill?: string;
+  bindState?: VisualBindState;
+}
+
+export interface VisualText {
+  type: 'text';
+  id?: string;
+  x: number; y: number;
+  text: string;
+  fontSize?: number;
+  fill?: string;
+  fontFamily?: string;
+  textAnchor?: string;
+  bindState?: VisualBindState;
+}
+
+export type VisualElement = VisualRect | VisualCircle | VisualPath | VisualText;
+
+export interface VisualTemplate {
+  /** SVG viewport width in breadboard-space pixels */
+  width: number;
+  /** SVG viewport height in breadboard-space pixels */
+  height: number;
+  elements: VisualElement[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 // Inline component definition (used in JSON `componentDefinitions` root key)
 export interface ComponentDefinitionEntry {
   name?: string;
   pins: number;
-  eval: string; // Raw JS string: (pins, state) => void
+  eval: string; // Raw JS string: (pins, state, sysTick) => void
   pinLabels?: Record<number, string>;
+  /**
+   * Optional: if present, the breadboard renders this SVG template instead of
+   * the standard black DIP rectangle. Elements can react to live pin states
+   * via their `bindState` property.
+   */
+  visualTemplate?: VisualTemplate;
 }
 
 // Legacy inline definition (used in JSON `customComponents` array)

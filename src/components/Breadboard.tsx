@@ -15,6 +15,7 @@ import { useBreadboard } from './breadboard/useBreadboard';
 import { getBreadboardLayout } from './breadboard/breadboardUtils';
 import { getTheme } from './breadboard/breadboardThemes';
 import { TestBenchPanel } from './breadboard/TestBenchPanel';
+import { DisplaysPanel } from './breadboard/DisplaysPanel';
 import { generateTruthTable } from '@/hooks/useSimulation';
 
 
@@ -84,6 +85,17 @@ export default function Breadboard({
   } = useBreadboard(simData, onWireChange, getAllTargets);
 
   const theme = getTheme(isDarkMode);
+
+  // Auto-detect whether this circuit has any visual-template chips
+  const hasVisualChips = (simData.chips ?? []).some(
+    chip => simData.componentDefinitions?.[chip.type]?.visualTemplate != null
+  );
+  const [showDisplays, setShowDisplays] = useState(false);
+
+  // Auto-open the panel whenever a new visual chip appears in the circuit
+  useEffect(() => {
+    if (hasVisualChips) setShowDisplays(true);
+  }, [hasVisualChips]);
 
   const exportTable = () => {
     const tableStr = generateTruthTable(simData);
@@ -181,6 +193,7 @@ export default function Breadboard({
             hideDetails={hideDetails}
             customComponents={simData.customComponents}
             componentDefinitions={simData.componentDefinitions}
+            pinStates={pinStates}
           />
 
           <BreadboardInputs 
@@ -327,6 +340,37 @@ export default function Breadboard({
       </div>
 
       <BreadboardTooltip tooltip={tooltip} theme={theme} />
+
+      {/* ── 🖥️ Monitor toggle button (only shown when visual chips exist) ── */}
+      {hasVisualChips && (
+        <button
+          onClick={() => setShowDisplays(v => !v)}
+          title={showDisplays ? 'Fechar Monitor de Displays' : 'Abrir Monitor de Displays'}
+          style={{
+            position: 'absolute', bottom: '20px', left: '20px', zIndex: 700,
+            display: 'flex', alignItems: 'center', gap: '7px',
+            background: showDisplays ? '#00b894' : (isDarkMode ? '#2d3436' : '#f0f4ff'),
+            color: showDisplays ? 'white' : (isDarkMode ? '#dfe6e9' : '#2d3436'),
+            border: `1px solid ${showDisplays ? '#00b894' : (isDarkMode ? '#636e72' : '#d0d8e4')}`,
+            padding: '9px 14px', borderRadius: '10px',
+            cursor: 'pointer', fontWeight: 700, fontSize: '13px',
+            boxShadow: showDisplays ? '0 0 16px rgba(0,184,148,0.4)' : '0 4px 12px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s',
+          }}
+        >
+          🖥️ {showDisplays ? 'Fechar Monitor' : 'Monitor de Displays'}
+        </button>
+      )}
+
+      {/* ── DisplaysPanel: draggable floating window ────────────────────── */}
+      {showDisplays && (
+        <DisplaysPanel
+          simData={simData}
+          pinStates={pinStates}
+          isDarkMode={isDarkMode}
+          onClose={() => setShowDisplays(false)}
+        />
+      )}
     </div>
   );
 }
