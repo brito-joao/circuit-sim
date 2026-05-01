@@ -10,10 +10,9 @@ import { useSimulation } from '@/hooks/useSimulation';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState(
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
-  );
+  const [isMobile, setIsMobile] = React.useState<boolean | null>(null);
   React.useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
     const handler = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
@@ -36,6 +35,9 @@ export default function Home() {
   const [mobileTab,   setMobileTab]   = useState<MobileTab>('board');
   const [clipboardMsg, setClipboardMsg] = useState('');
   const isMobile = useIsMobile();
+
+  // Prevent hydration mismatch by waiting for the client to mount and determine device type
+  if (isMobile === null) return null;
 
   const handleJsonChange = useCallback((value: string) => {
     setJsonCode(value);
@@ -86,68 +88,173 @@ export default function Home() {
 
   // ===================== MOBILE =====================
   if (isMobile) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: '#f0f2f5' }}>
-        <Header isRunning={isRunning} onToggleSimulation={toggleSimulation} onCompile={handleCompile} compileError={compileError} />
+    const tabDef = [
+      { id: 'board', label: '🔌', title: 'Placa' },
+      { id: 'json',  label: '📥', title: 'Colar IA' },
+      { id: 'io',    label: '⚡', title: 'E/S' },
+    ] as const;
 
-        <div style={{ display: 'flex', background: '#1e272e', borderBottom: '1px solid #2d3436', flexShrink: 0 }}>
-          {(['board', 'io', 'json'] as MobileTab[]).map(tab => (
-            <button key={tab} onClick={() => setMobileTab(tab)} style={{
-              flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer',
-              fontWeight: 700, fontSize: '12px', textTransform: 'uppercase',
-              background: mobileTab === tab ? '#6c5ce7' : 'transparent',
-              color: mobileTab === tab ? '#fff' : '#b2bec3',
-              borderBottom: mobileTab === tab ? '2px solid #a29bfe' : '2px solid transparent',
-              transition: 'all 0.2s',
-            }}>
-              {tab === 'board' ? '🔌 Board' : tab === 'io' ? '⚡ I/O' : '📄 JSON'}
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column',
+        height: '100dvh', overflow: 'hidden',
+        background: '#0f1923',
+      }}>
+
+        {/* ── Lean mobile header ─────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', flexShrink: 0,
+          background: '#1e272e',
+          borderBottom: '2px solid #6c5ce7',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.4)',
+        }}>
+          <span style={{ fontWeight: 800, fontSize: '14px', color: '#fff', letterSpacing: '0.3px' }}>
+            ⚡ CircuitSim
+          </span>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Status pill */}
+            {compileError
+              ? <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '8px', background: 'rgba(214,48,49,0.25)', color: '#ff7675', fontWeight: 700 }}>Erro</span>
+              : isRunning
+              ? <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '8px', background: 'rgba(0,184,148,0.25)', color: '#55efc4', fontWeight: 700 }}>Simulando</span>
+              : null
+            }
+
+            {/* Run / Stop */}
+            <button
+              onClick={toggleSimulation}
+              style={{
+                padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                fontWeight: 800, fontSize: '13px',
+                background: isRunning ? '#d63031' : '#00b894',
+                color: '#fff',
+                boxShadow: isRunning ? '0 0 12px rgba(214,48,49,0.4)' : '0 0 12px rgba(0,184,148,0.4)',
+              }}
+            >
+              {isRunning ? '⏸ Parar' : '▶ Iniciar'}
             </button>
-          ))}
+
+            {/* Compile (only shown when stopped) */}
+            {!isRunning && (
+              <button
+                onClick={handleCompile}
+                style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '12px', background: '#6c5ce7', color: '#fff' }}
+              >
+                ✓
+              </button>
+            )}
+          </div>
         </div>
 
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          {mobileTab === 'board' && <Breadboard {...breadboardProps} />}
+        {/* ── Tab content ────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', background: '#0f1923' }}>
 
-          {mobileTab === 'io' && (
-            <div style={{ height: '100%', overflow: 'auto', background: '#f0f2f5' }} data-tour="io-panel">
-              <DigitalIOPanel simData={simData} pinStates={pinStates} isDarkMode={false} onWireChange={handleWireChange} onInputClick={toggleInputState} />
-            </div>
-          )}
+          {/* BOARD TAB — full-screen breadboard, touch-action:none on wrapper */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: mobileTab === 'board' ? 'flex' : 'none',
+            flexDirection: 'column',
+            // touch-action:none tells the browser to hand ALL touch events to JS
+            // This is required for the pinch/pan handlers in useBreadboard to work
+            touchAction: 'none',
+          }}>
+            <Breadboard {...breadboardProps} isMobile />
 
+
+          </div>
+
+          {/* JSON TAB — paste-first */}
           {mobileTab === 'json' && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }} data-tour="json-editor">
-              {/* BIG PASTE BUTTON — main action */}
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+              {/* Big paste button */}
               <button
-                data-tour="paste-from-ai"
                 onClick={handlePasteJson}
                 style={{
+                  width: '100%', padding: '22px 16px', flexShrink: 0, border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #00b894 0%, #00cec9 100%)',
+                  color: '#fff', fontSize: '18px', fontWeight: 900,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                  width: '100%', padding: '20px',
-                  background: 'linear-gradient(90deg, #00b894, #00cec9)',
-                  color: 'white', border: 'none', cursor: 'pointer',
-                  fontSize: '17px', fontWeight: 800, flexShrink: 0,
-                  boxShadow: '0 4px 16px rgba(0,184,148,0.4)',
+                  boxShadow: '0 4px 20px rgba(0,184,148,0.5)',
+                  letterSpacing: '0.5px',
                 }}
               >
-                <span style={{ fontSize: '22px' }}>📥</span>
-                <span>COLAR DA IA</span>
+                <span style={{ fontSize: '26px' }}>📥</span>
+                COLAR DA IA
               </button>
-              {/* Compact secondary bar */}
-              <div style={{ padding: '8px 12px', background: '#2d3436', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: '12px', color: '#b2bec3', flex: 1 }}>JSON</span>
+
+              {/* Secondary toolbar */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '8px 12px', background: '#1e272e', flexShrink: 0,
+                borderBottom: '1px solid #2d3436',
+              }}>
+                <span style={{ fontSize: '11px', color: '#b2bec3', flex: 1 }}>JSON do Circuito</span>
                 {clipboardMsg && <span style={{ fontSize: '12px', color: '#00b894', fontWeight: 700 }}>{clipboardMsg}</span>}
-                <button onClick={handleCopyJson} style={{ background: 'rgba(0,184,148,0.2)', color: '#55efc4', border: 'none', padding: '5px 10px', borderRadius: '4px', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}>
+                <button
+                  onClick={handleCopyJson}
+                  style={{ background: 'rgba(0,184,148,0.15)', color: '#55efc4', border: '1px solid rgba(0,184,148,0.3)', padding: '5px 10px', borderRadius: '6px', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}
+                >
                   📋 Copiar
                 </button>
               </div>
+
+              {/* Textarea */}
               <textarea
                 value={jsonCode}
                 onChange={e => handleJsonChange(e.target.value)}
                 spellCheck={false} autoCorrect="off" autoCapitalize="off"
-                style={{ flex: 1, background: '#1e272e', color: '#a29bfe', fontFamily: 'monospace', fontSize: '13px', border: 'none', padding: '14px', resize: 'none', outline: 'none', lineHeight: 1.6 }}
+                style={{
+                  flex: 1, background: '#141e27', color: '#a29bfe',
+                  fontFamily: 'monospace', fontSize: '13px',
+                  border: 'none', padding: '14px', resize: 'none', outline: 'none', lineHeight: 1.6,
+                }}
               />
             </div>
           )}
+
+          {/* I/O TAB */}
+          {mobileTab === 'io' && (
+            <div style={{ height: '100%', overflow: 'auto', background: '#f5f6fa' }}>
+              <DigitalIOPanel
+                simData={simData} pinStates={pinStates}
+                isDarkMode={false} onWireChange={handleWireChange}
+                onInputClick={toggleInputState}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ── Bottom nav bar ──────────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex', flexShrink: 0,
+          background: '#1e272e',
+          borderTop: '1px solid #2d3436',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}>
+          {tabDef.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setMobileTab(tab.id as MobileTab)}
+              style={{
+                flex: 1, padding: '10px 4px 8px',
+                border: 'none', cursor: 'pointer',
+                background: mobileTab === tab.id ? 'rgba(108,92,231,0.2)' : 'transparent',
+                borderTop: `2px solid ${mobileTab === tab.id ? '#6c5ce7' : 'transparent'}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+                transition: 'all 0.15s',
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>{tab.label}</span>
+              <span style={{
+                fontSize: '10px', fontWeight: 700,
+                color: mobileTab === tab.id ? '#a29bfe' : '#636e72',
+                textTransform: 'uppercase', letterSpacing: '0.5px',
+              }}>{tab.title}</span>
+            </button>
+          ))}
         </div>
       </div>
     );

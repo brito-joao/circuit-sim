@@ -203,7 +203,7 @@ export function simulateCircuit(
   //   writes; pass 2: NAND B sees it; pass 3: stable). No regression here.
   let stable    = false;
   let iterations = 0;
-  while (!stable && iterations < 10) {
+  while (!stable && iterations < 20) {
     stable = true;
     iterations++;
 
@@ -254,7 +254,7 @@ export function simulateCircuit(
   }
 
   if (!stable) {
-    console.warn('[Simulator] Circuit did not settle after 10 passes — possible oscillation.');
+    console.warn('[Simulator] Circuit did not settle after 20 passes — possible oscillation.');
   }
 
   // 3. Map final net states to named targets for React rendering
