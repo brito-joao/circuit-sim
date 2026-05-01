@@ -8,6 +8,8 @@ import { ComponentPalette } from '@/components/breadboard/ComponentPalette';
 import { DigitalIOPanel } from '@/components/breadboard/DigitalIOPanel';
 import { useSimulation } from '@/hooks/useSimulation';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { OnboardingTour } from '@/components/OnboardingTour';
+import { getAIPrompt } from '@/lib/aiPrompt';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | null>(null);
@@ -34,6 +36,7 @@ export default function Home() {
   const [editMode,    setEditMode]    = useState(false);
   const [mobileTab,   setMobileTab]   = useState<MobileTab>('board');
   const [clipboardMsg, setClipboardMsg] = useState('');
+  const [tourOpen,    setTourOpen]    = useState(false);
   const isMobile = useIsMobile();
 
   // Prevent hydration mismatch by waiting for the client to mount and determine device type
@@ -65,6 +68,20 @@ export default function Home() {
     }
     setTimeout(() => setClipboardMsg(''), 2000);
   }, [jsonCode]);
+
+  const handleCopyAIPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(getAIPrompt());
+      setClipboardMsg('🤖 Prompt Copied!');
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = getAIPrompt(); el.style.position = 'fixed'; el.style.opacity = '0';
+      document.body.appendChild(el); el.focus(); el.select();
+      document.execCommand('copy'); document.body.removeChild(el);
+      setClipboardMsg('🤖 Prompt Copied!');
+    }
+    setTimeout(() => setClipboardMsg(''), 2000);
+  }, []);
 
   const handlePasteJson = useCallback(async () => {
     try {
@@ -136,6 +153,14 @@ export default function Home() {
               {isRunning ? '⏸ Parar' : '▶ Iniciar'}
             </button>
 
+            {/* Help Button */}
+            <button
+              onClick={() => setTourOpen(true)}
+              style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'rgba(255,255,255,0.1)', color: '#fff' }}
+            >
+              ❓
+            </button>
+
             {/* Compile (only shown when stopped) */}
             {!isRunning && (
               <button
@@ -193,6 +218,12 @@ export default function Home() {
               }}>
                 <span style={{ fontSize: '11px', color: '#b2bec3', flex: 1 }}>JSON do Circuito</span>
                 {clipboardMsg && <span style={{ fontSize: '12px', color: '#00b894', fontWeight: 700 }}>{clipboardMsg}</span>}
+                <button
+                  onClick={handleCopyAIPrompt}
+                  style={{ background: 'rgba(108,92,231,0.15)', color: '#a29bfe', border: '1px solid rgba(108,92,231,0.3)', padding: '5px 10px', borderRadius: '6px', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}
+                >
+                  🤖 Copiar Prompt IA
+                </button>
                 <button
                   onClick={handleCopyJson}
                   style={{ background: 'rgba(0,184,148,0.15)', color: '#55efc4', border: '1px solid rgba(0,184,148,0.3)', padding: '5px 10px', borderRadius: '6px', fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}
@@ -256,6 +287,11 @@ export default function Home() {
             </button>
           ))}
         </div>
+
+        {/* Onboarding Tour for Mobile */}
+        {tourOpen && <OnboardingTour forceOpen onClose={() => setTourOpen(false)} />}
+        {!tourOpen && <OnboardingTour />}
+
       </div>
     );
   }

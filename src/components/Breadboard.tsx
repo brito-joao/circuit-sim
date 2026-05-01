@@ -274,18 +274,28 @@ export default function Breadboard({
               📋 Copy Lab Table
             </button>
           </div>
+        </>
+      )}
 
-          {/* ─── Guided Build Mode (IKEA Step-by-Step) ─────────────────────── */}
-          <div
-            data-tour="ikea-panel"
-            style={{
-              position: 'absolute', bottom: '20px', right: '20px',
-              background: isDarkMode ? 'rgba(30,39,46,0.97)' : 'rgba(255,255,255,0.98)',
-              padding: '16px', borderRadius: '14px', minWidth: '220px', maxWidth: '260px',
-              border: `1px solid ${isDarkMode ? '#2d3436' : '#e0e4f0'}`,
-              boxShadow: '0 8px 28px rgba(0,0,0,0.14)',
-            }}
-          >
+      {/* ─── Guided Build Mode (IKEA Step-by-Step) ─────────────────────── */}
+      <div
+        data-tour="ikea-panel"
+        style={{
+          position: 'absolute',
+          bottom: isMobile ? '12px' : '20px',
+          left: isMobile ? '12px' : 'auto',
+          right: isMobile ? 'auto' : '20px',
+          background: isDarkMode ? 'rgba(30,39,46,0.97)' : 'rgba(255,255,255,0.98)',
+          padding: isMobile ? '10px' : '16px',
+          borderRadius: '14px',
+          width: isMobile ? '220px' : 'auto',
+          minWidth: isMobile ? '0' : '220px',
+          maxWidth: '260px',
+          border: `1px solid ${isDarkMode ? '#2d3436' : '#e0e4f0'}`,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.14)',
+          zIndex: 500,
+        }}
+      >
             {/* Header */}
             <div style={{ marginBottom: '12px' }}>
               <div style={{ fontWeight: 800, fontSize: '13px', color: isDarkMode ? '#f5f6fa' : '#1e272e', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -369,8 +379,6 @@ export default function Breadboard({
               </button>
             </div>
           </div>
-        </>
-      )}
 
       <BreadboardTooltip tooltip={tooltip} theme={theme} />
 
