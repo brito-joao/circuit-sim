@@ -176,12 +176,41 @@ export function simulateCircuit(
     }
   });
 
-  // 2. Stable-State Relaxation Loop (max 10 passes)
+  // 2. Stable-State Relaxation Loop with Double Buffering (max 10 passes)
+  //
+  // DOUBLE-BUFFER INVARIANT:
+  //   Each pass is a complete, independent "simultaneous evaluation" of all chips.
+  //   - passSnapshot  = what the nets looked like at the START of this pass
+  //                     (every chip reads from this → no chip can read another
+  //                      chip's output that was written in the same pass)
+  //   - netStates     = accumulates all writes during this pass
+  //   - stable        = true iff netStates === passSnapshot after all chips run
+  //
+  // Why not just freeze once at tick start?
+  //   Combinational chains (AND → OR → XOR) NEED to see intermediate writes
+  //   across passes to converge. Freezing once would stop them from settling.
+  //   Freezing per-pass gives combinational logic one extra iteration per gate
+  //   depth — with 10 passes, chains up to 10 gates deep resolve correctly.
+  //
+  // Why this fixes the shift register race:
+  //   FF1 writes Q_new to netStates in pass N.
+  //   FF2 reads FF1's Q from passSnapshot (which still has Q_old from before
+  //   pass N started). FF2 therefore captures Q_old, not Q_new. This matches
+  //   real hardware: all flip-flops clock simultaneously on the same edge.
+  //
+  // SR latches are unaffected:
+  //   The latch's cross-coupling converges over multiple passes (pass 1: NAND A
+  //   writes; pass 2: NAND B sees it; pass 3: stable). No regression here.
   let stable    = false;
   let iterations = 0;
   while (!stable && iterations < 10) {
     stable = true;
     iterations++;
+
+    // ── FREEZE: snapshot nets at the start of this pass ─────────────────────
+    // Every chip in this pass READS from this frozen copy.
+    // Every chip WRITES to netStates (the accumulator for this pass).
+    const passSnapshot = { ...netStates };
 
     simData.chips?.forEach(chip => {
       const lib = localLib[chip.type];
@@ -191,30 +220,32 @@ export function simulateCircuit(
       if (!chipStates[chip.id]) chipStates[chip.id] = {};
       const chipState = chipStates[chip.id];
 
-      // Proxy: reads from nets (safe 0 for uninitialized), writes back to nets
+      // Proxy:
+      //   GET  → reads from passSnapshot (frozen at the top of this pass)
+      //   SET  → writes to netStates    (the accumulator)
+      //   The split is the double-buffer: reads and writes are temporally isolated.
       const pinsProxy = new Proxy([] as number[], {
         get(_t, prop) {
           const p = parseInt(prop as string);
           if (isNaN(p)) return undefined;
-          return netStates[uf.find(getParentNodeId(`${chip.id}.${p}`))] ?? 0;
+          // ← passSnapshot, NOT netStates
+          return passSnapshot[uf.find(getParentNodeId(`${chip.id}.${p}`))] ?? 0;
         },
         set(_t, prop, value) {
           const p = parseInt(prop as string);
           if (isNaN(p)) return true;
           const root = uf.find(getParentNodeId(`${chip.id}.${p}`));
-          if (netStates[root] !== value) {
+          // ← Compare against snapshot to detect if this write is a real change
+          if (passSnapshot[root] !== value) {
             netStates[root] = value;
-            stable = false; // Propagation triggered — need another pass
+            stable = false; // Net changed vs snapshot → need another pass
           }
           return true;
         }
       });
 
       try {
-        // sysTick is passed as the 3rd argument — it is the SAME frozen value
-        // for every chip in every relaxation pass of this single tick.
-        // This means an oscillator chip reads a constant value here, never
-        // accumulating, even if the relaxation loop fires 10 times.
+        // sysTick is passed as the 3rd argument — frozen for the entire tick.
         lib.eval(pinsProxy, chipState, sysTick);
       } catch (e) {
         console.error(`[Simulator] Error evaluating chip "${chip.id}" (${chip.type}):`, e);
