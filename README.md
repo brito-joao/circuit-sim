@@ -2,6 +2,8 @@
 
 > A JSON-driven, browser-based digital breadboard simulator built with **Next.js 16 + React 19**. Design and simulate real TTL/CMOS circuits using an AI chatbot or step through your wiring one wire at a time — no hardware required.
 
+**Live Demo:** [https://circuit-sim-xi.vercel.app/](https://circuit-sim-xi.vercel.app/)
+
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-black?logo=next.js)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org)
