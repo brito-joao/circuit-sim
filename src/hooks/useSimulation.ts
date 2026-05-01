@@ -50,6 +50,13 @@ const defaultJSON: CircuitData = {
 // ==========================================
 // Build the merged local component library
 // Priority: componentDefinitions > customComponents > ComponentLibrary
+//
+// IMPORTANT: Custom eval strings are compiled with THREE sandbox arguments:
+//   pins    — the Proxy over electrical nets (reads/writes to this tick's netStates)
+//   state   — the chip's persistent memory object (survives across ticks)
+//   sysTick — the global simulation clock (integer, increments once per setInterval
+//             fire). This is the ONLY safe way for oscillator components to read
+//             time without polluting the relaxation loop.
 // ==========================================
 function buildLocalLib(simData: CircuitData): Record<string, any> {
   const localLib: Record<string, any> = { ...ComponentLibrary };
@@ -58,7 +65,8 @@ function buildLocalLib(simData: CircuitData): Record<string, any> {
   if (simData.customComponents) {
     simData.customComponents.forEach(cc => {
       try {
-        const evalFn = new Function('pins', 'state', `"use strict"; ${cc.eval}`);
+        // ← sysTick added as 3rd sandbox argument
+        const evalFn = new Function('pins', 'state', 'sysTick', `"use strict"; ${cc.eval}`);
         localLib[cc.type] = {
           name:      cc.name || cc.type,
           pins:      cc.pins,
@@ -76,7 +84,8 @@ function buildLocalLib(simData: CircuitData): Record<string, any> {
   if (simData.componentDefinitions) {
     Object.entries(simData.componentDefinitions).forEach(([type, def]) => {
       try {
-        const evalFn = new Function('pins', 'state', `"use strict"; ${def.eval}`);
+        // ← sysTick added as 3rd sandbox argument
+        const evalFn = new Function('pins', 'state', 'sysTick', `"use strict"; ${def.eval}`);
         localLib[type] = {
           name:      def.name || type,
           pins:      def.pins,
@@ -96,12 +105,17 @@ function buildLocalLib(simData: CircuitData): Record<string, any> {
 // ==========================================
 // Pure simulation function
 // chipStates: mutable per-chip state objects (for edge-triggered logic)
+// sysTick:    global simulation clock — FROZEN for the entire duration of this
+//             call. The relaxation loop may call lib.eval many times, but sysTick
+//             never changes within a single call. Components MUST NOT mutate their
+//             own tick counter; they should only READ sysTick.
 // ==========================================
 export function simulateCircuit(
   simData: CircuitData,
   inputStates: Record<string, number>,
   prevStates: PinStates,
-  chipStates: ChipStateMap
+  chipStates: ChipStateMap,
+  sysTick: number = 0            // ← Global System Time injected here
 ): PinStates {
 
   const getParentNodeId = (target: string): string => {
@@ -197,7 +211,11 @@ export function simulateCircuit(
       });
 
       try {
-        lib.eval(pinsProxy, chipState);
+        // sysTick is passed as the 3rd argument — it is the SAME frozen value
+        // for every chip in every relaxation pass of this single tick.
+        // This means an oscillator chip reads a constant value here, never
+        // accumulating, even if the relaxation loop fires 10 times.
+        lib.eval(pinsProxy, chipState, sysTick);
       } catch (e) {
         console.error(`[Simulator] Error evaluating chip "${chip.id}" (${chip.type}):`, e);
       }
@@ -278,15 +296,38 @@ export function useSimulation() {
   const [debugMode,    setDebugMode]    = useState<boolean>(false);
   const [changedPins,  setChangedPins]  = useState<Set<string>>(new Set());
 
+  // ─── Global System Time ───────────────────────────────────────────────────
+  // simulationTick is the ONE source of truth for time in the entire engine.
+  // It increments exactly ONCE per setInterval fire (every 100 ms by default).
+  // The relaxation loop receives this frozen integer and passes it to every
+  // chip eval. Because the tick does not change mid-loop, oscillator components
+  // (555 timers, clock dividers) read a stable value and can never accumulate
+  // spurious counts from repeated relaxation passes.
+  const [simulationTick, setSimulationTick] = useState<number>(0);
+
   // chipStates lives in a ref so it persists across renders without causing re-renders
   const chipStatesRef = useRef<ChipStateMap>({});
+
+  // Capture the latest simulationTick in a ref so evaluateLogic always reads
+  // the current value without needing it as a useCallback dependency.
+  const simTickRef = useRef<number>(0);
+  useEffect(() => { simTickRef.current = simulationTick; }, [simulationTick]);
 
   // Helper: evaluate one tick, compute changed pins for flash animation
   const evaluateLogic = useCallback(() => {
     setPinStates(prevStates => {
       const currentInputStates: Record<string, number> = {};
       simData.inputs?.forEach(inp => { currentInputStates[inp.id] = inp.state; });
-      const next = simulateCircuit(simData, currentInputStates, prevStates, chipStatesRef.current);
+
+      // Pass the FROZEN global tick — this value does not change during the
+      // relaxation loop, so oscillators read a stable number.
+      const next = simulateCircuit(
+        simData,
+        currentInputStates,
+        prevStates,
+        chipStatesRef.current,
+        simTickRef.current,
+      );
 
       // Compute changed pins (for debug flash animation)
       const changed = new Set<string>();
@@ -301,10 +342,10 @@ export function useSimulation() {
 
   // Manual single-tick step (used in debug mode)
   const executeTick = useCallback(() => {
-    evaluateLogic();
-    // Clear flash highlights after 700ms
+    // In debug mode we must also advance the system clock so oscillators step.
+    setSimulationTick(t => t + 1);
     setTimeout(() => setChangedPins(new Set()), 700);
-  }, [evaluateLogic]);
+  }, []);
 
   const compileCircuit = useCallback((jsonString: string) => {
     try {
@@ -313,6 +354,9 @@ export function useSimulation() {
       setCompileError(null);
       // Reset all edge-triggered chip memory on recompile
       chipStatesRef.current = {};
+      // Reset the global clock so oscillators start from a clean state
+      setSimulationTick(0);
+      simTickRef.current = 0;
 
       const initialStates: PinStates = { VCC: 1, GND: 0 };
       parsed.inputs?.forEach(inp => { initialStates[inp.id] = inp.state; });
@@ -348,16 +392,29 @@ export function useSimulation() {
     });
   }, [isRunning]);
 
-  // Auto-tick interval — paused in debug mode so user steps manually
+  // ─── Global Clock: the interval ONLY advances the tick ───────────────────
+  // evaluateLogic is NOT called directly from the interval anymore.
+  // Instead, advancing simulationTick triggers the effect below which calls
+  // evaluateLogic. This two-step design means the tick is always committed to
+  // React state before the engine reads it, so simTickRef.current is fresh.
   useEffect(() => {
     if (!isRunning || debugMode) return;
-    const interval = setInterval(() => { evaluateLogic(); }, 100);
+    const interval = setInterval(() => {
+      setSimulationTick(t => t + 1);   // ← This is the ONLY place time advances
+    }, 100);
     return () => clearInterval(interval);
-  }, [isRunning, debugMode, evaluateLogic]);
+  }, [isRunning, debugMode]);
 
+  // ─── Run engine on every tick change (and on simData recompile) ──────────
   useEffect(() => {
     evaluateLogic();
-  }, [simData, evaluateLogic]);
+  }, [simulationTick, evaluateLogic]);
+
+  // Initial evaluation when circuit is first loaded
+  useEffect(() => {
+    evaluateLogic();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simData]);
 
   return {
     simData,
@@ -366,6 +423,7 @@ export function useSimulation() {
     compileError,
     debugMode,
     changedPins,
+    simulationTick,
     compileCircuit,
     toggleSimulation,
     toggleDebugMode,
